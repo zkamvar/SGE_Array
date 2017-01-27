@@ -173,34 +173,34 @@ def write_qsub(args):
 		#!/usr/bin/env bash
 		#
 		# Export all environment variables
-		#SBATCH -V
+		##SBATCH -V
 		#
 		# Use current working directory
-		#SBATCH -cwd
+		##SBATCH -cwd
 		#
 		# Use bash as the executing shell
-		#SBATCH -S /bin/bash
+		##SBATCH -S /bin/bash
 		# \n'''))
 	scripth.write("# Set job name \n")
-	scripth.write("#SBATCH -N " + str(os.path.basename(args.rundir)) + "\n")
+	scripth.write("#SBATCH --job-name=" + str(os.path.basename(args.rundir)) + "\n")
 	scripth.write("# \n")
 
-	scripth.write("# Set task concurrency (max array jobs running simultaneously) \n")
-	scripth.write("#SBATCH -tc " + str(args.concurrency) + "\n")
-	scripth.write("# \n")
+	#scripth.write("# Set task concurrency (max array jobs running simultaneously) \n")
+	#scripth.write("#SBATCH -tc " + str(args.concurrency) + "\n")
+	#scripth.write("# \n")
 	
-	scripth.write("# Set array job range (1 to number of commands in cmd file) \n")
-	scripth.write("#SBATCH -t 1-" + str(len(args.commands)) + "\n")
+	scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
+	scripth.write("#SBATCH --array=1-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
 	scripth.write("# \n")
 
 	scripth.write("# Output files for stdout and stderr \n")
-	scripth.write("#SBATCH -o " + args.rundir + "\n")
-	scripth.write("#SBATCH -e " + args.rundir + "\n")
+	scripth.write("#SBATCH --output=" + args.rundir + "/job.%J_%A_%a.out\n")
+	scripth.write("#SBATCH --error=" + args.rundir + "/job.%J_%A_%a.err\n")
 	scripth.write("# \n")
 
 	if args.queue != None:
-		scripth.write("# Set queues to use \n")
-		scripth.write("#SBATCH -q " + str(args.queue) + "\n")
+		scripth.write("# Set partitions to use \n")
+		scripth.write("#SBATCH --partition=" + str(args.queue) + "\n")
 		scripth.write("# \n")
 
 	# if holding...
@@ -216,24 +216,24 @@ def write_qsub(args):
 			holdfor.extend(prev_jobs)
 		if len(holdfor) > 0:                    # if there's anything to hold for, actually do a hold ;)
 			scripth.write("# Hold for these job numbers, from .sge_array_jobnums and --hold_jid \n")
-			scripth.write("#SBATCH -hold_jid " + ",".join(holdfor) + "\n")
+			scripth.write("#SBATCH --depend=afterany:" + ":".join(holdfor) + "\n")
 			scripth.write("# \n")
 
-	scripth.write("# Set filelimit \n")
-	scripth.write("#SBATCH -l h_fsize=" + str(args.filelimit) + "\n")
-	scripth.write("# \n")
+	#scripth.write("# Set filelimit \n")
+	#scripth.write("#SBATCH -l h_fsize=" + str(args.filelimit) + "\n")
+	#scripth.write("# \n")
 	
 	scripth.write("# Set memory requested and max memory \n")
-	scripth.write("#SBATCH -l mem_free=" + str(args.memory) + "\n")
-	scripth.write("#SBATCH -l h_vmem=" + str(args.memory) + "\n")
+	scripth.write("#SBATCH mem=" + str(args.memory) + "\n")
+	#scripth.write("#SBATCH -l h_vmem=" + str(args.memory) + "\n")
 	scripth.write("# \n")
 	
 	scripth.write("# Request some processors \n")
-	scripth.write("#SBATCH -pe thread " + str(args.processors) + "\n")
+	scripth.write("#SBATCH --cpu_per_task=" + str(args.processors) + "\n")
 	scripth.write("# \n")
 	
 	scripth.write("# Set path \n")
-	scripth.write("export PATH=" + str(args.path) + "\n")
+	scripth.write("#SBATCH --export=PATH=" + str(args.path) + "\n")
 	
 	scripth.write("# \n")
 	scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
@@ -242,12 +242,12 @@ def write_qsub(args):
 	scripth.write("# Run the command through time with memory and such reporting. \n")
 	scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
 	scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
-	scripth.write("cmdcmd=`sed \"$SGE_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
-	scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command.$SGE_TASK_ID.txt\n")
-	scripth.write("echo $cmdcmd >> " + args.rundir + "/command.$SGE_TASK_ID.txt\n")
-	scripth.write("chmod u+x " + args.rundir + "/command.$SGE_TASK_ID.txt\n")
+	scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_JOB_ID q;d\" " + args.rundir + "/commands.txt`\n")
+	scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command.$SLURM_ARRAY_JOB_ID.txt\n")
+	scripth.write("echo $cmdcmd >> " + args.rundir + "/command.$SLURM_ARRAY_JOB_ID.txt\n")
+	scripth.write("chmod u+x " + args.rundir + "/command.$SLURM_ARRAY_JOB_ID.txt\n")
 	scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
-	scripth.write(args.rundir + "/command.$SGE_TASK_ID.txt\n")
+	scripth.write(args.rundir + "/command.$SLURM_ARRAY_JOB_ID.txt\n")
 	scripth.write("echo \"  Finished at:           \" `date` \n")
 	
 	scripth.close()
