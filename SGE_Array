@@ -272,6 +272,6 @@ args = parse_input()
 make_rundir(args.rundir)
 write_commands(args.commands, args.rundir)
 write_qsub(args)
-exec_qsub(args)
+# exec_qsub(args)
 
 
