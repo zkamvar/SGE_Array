@@ -50,9 +50,9 @@ def parse_input():
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-p', '--path', required = False, dest = "path", help = "What to use as the PATH for the commands. Default: whatever is output by echo $PATH.")
-	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .sge_array_jobnums.")
+	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
-	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SGE_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .sge_array_jobnums.")
+	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SGE_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
 	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.6.8')
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
@@ -101,8 +101,8 @@ def parse_input():
 
 def get_hold_jobs():
 	jobslist = list()
-	if os.path.isfile(".sge_array_jobnums"):
-		fhandle = io.open(".sge_array_jobnums", "rb")
+	if os.path.isfile(".slurm_array_jobnums"):
+		fhandle = io.open(".slurm_array_jobnums", "rb")
 		for line in fhandle:
 			line_list = line.strip().split('\t')
 			jobnum = line_list[0].split('.')[0]
@@ -115,8 +115,8 @@ def get_hold_jobs():
 def get_hold_jobs_by_names(names):
 	jobslist = list()
 	job_names_to_nums = dict()
-	if os.path.isfile(".sge_array_jobnums"):
-		fhandle = io.open(".sge_array_jobnums", "rb")
+	if os.path.isfile(".slurm_array_jobnums"):
+		fhandle = io.open(".slurm_array_jobnums", "rb")
 		for line in fhandle:
 			line_list = line.strip().split('\t')
 			jobnum = line_list[0].split('.')[0]
@@ -133,13 +133,13 @@ def get_hold_jobs_by_names(names):
 				found = True
 				
 		if not found:
-			sys.stderr.write("Warning: job " + name + " does not match any job name in .sge_array_jobnums; cannot hold for this job.\n")
+			sys.stderr.write("Warning: job " + name + " does not match any job name in .slurm_array_jobnums; cannot hold for this job.\n")
 
 		## Previous: before using regex matching
 		#if job_names_to_nums.has_key(name):
 		#	jobslist.append(job_names_to_nums[name])
 		#else:
-		#	sys.stderr.write("Warning: job " + name + " is not a recognized job name in .sge_array_jobnums; cannot hold for this job.\n")
+		#	sys.stderr.write("Warning: job " + name + " is not a recognized job name in .slurm_array_jobnums; cannot hold for this job.\n")
 
 	return jobslist
 
@@ -167,7 +167,8 @@ def write_commands(cmds, rundir):
 
 ########## write the qsub script to args.rundir/args.rundir.sh
 def write_qsub(args):
-	scripth = io.open(args.rundir + "/" + os.path.basename(args.rundir) + ".sh", "wb")
+	jobname = os.path.basename(args.rundir)
+	scripth = io.open(args.rundir + "/" + jobname + ".sh", "wb")
 
 	scripth.write(textwrap.dedent('''\
 		#!/usr/bin/env bash
@@ -182,7 +183,7 @@ def write_qsub(args):
 		##SBATCH -S /bin/bash
 		# \n'''))
 	scripth.write("# Set job name \n")
-	scripth.write("#SBATCH --job-name=" + str(os.path.basename(args.rundir)) + "\n")
+	scripth.write("#SBATCH --job-name=" + str(jobname) + "\n")
 	scripth.write("# \n")
 
 	#scripth.write("# Set task concurrency (max array jobs running simultaneously) \n")
@@ -194,8 +195,8 @@ def write_qsub(args):
 	scripth.write("# \n")
 
 	scripth.write("# Output files for stdout and stderr \n")
-	scripth.write("#SBATCH --output=" + args.rundir + "/job.%J.%A.%a.out\n")
-	scripth.write("#SBATCH --error=" + args.rundir + "/job.%J.%A.%a.err\n")
+	scripth.write("#SBATCH --output=" + args.rundir + "/" + jobname + ".%J.%A.%a.out\n")
+	scripth.write("#SBATCH --error=" + args.rundir + "/" + jobname + ".%J.%A.%a.err\n")
 	scripth.write("# \n")
 
 	if args.queue != None:
@@ -215,7 +216,7 @@ def write_qsub(args):
 			prev_jobs = get_hold_jobs()
 			holdfor.extend(prev_jobs)
 		if len(holdfor) > 0:                    # if there's anything to hold for, actually do a hold ;)
-			scripth.write("# Hold for these job numbers, from .sge_array_jobnums and --hold_jid \n")
+			scripth.write("# Hold for these job numbers, from .slurm_array_jobnums and --hold_jid \n")
 			scripth.write("#SBATCH --depend=afterany:" + ":".join(holdfor) + "\n")
 			scripth.write("# \n")
 
@@ -243,11 +244,11 @@ def write_qsub(args):
 	scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
 	scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
 	scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
-	scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command.$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("echo $cmdcmd >> " + args.rundir + "/command.$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("chmod u+x " + args.rundir + "/command.$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
+	scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
+	scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
+	scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
 	scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
-	scripth.write(args.rundir + "/command.$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
+	scripth.write(args.rundir + "/command." + jobname + ".$SLURM_JOB_ID.$SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID.txt\n")
 	scripth.write("echo \"  Finished at:           \" `date` \n")
 	
 	scripth.close()
@@ -265,8 +266,8 @@ def exec_qsub(args):
 		quit()
 	
 	jobnum = res.strip()
-	print("Successfully submitted job " + jobnum + ", logging job number, timestamp, and rundir to .sge_array_jobnums")
-	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> .sge_array_jobnums", shell = True)
+	print("Successfully submitted job " + jobnum + ", logging job number, timestamp, and rundir to .slurm_array_jobnums")
+	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> .slurm_array_jobnums", shell = True)
 
 args = parse_input()
 args.rundir = os.path.expandvars("$WORK/" + args.rundir)
