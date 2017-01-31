@@ -44,7 +44,8 @@ def parse_input():
 	parser = argparse.ArgumentParser(description='Runs a list of commands specified on stdin as an SGE array job. \nExample usage: cat `commands.txt | SGE_Array` or `SGE_Array -c commands.txt`')
 	parser.add_argument('-c', '--commandsfile', required = False, dest = "commandsfile", default = "-", help = "The file to read commands from. Default: -, meaning standard input.")
 	parser.add_argument('-q', '--queue', required = False, dest = "queue", help = "The queue(s) to send the commands to. Default: all queues you have access to.")
-	parser.add_argument('-m', '--memory', required = False, dest = "memory", default = "4gb", help = "Amount of free RAM to request for each command, and the maximum that each can use without being killed. Default: 4G")
+	parser.add_argument('-m', '--memory', required = False, dest = "memory", default = "4gb", help = "Amount of free RAM to request for each command, and the maximum that each can use without being killed. Default: 4gb")
+	parser.add_argument('-M', '--module', required = False, dest = "module", default = "", type = str, nargs = "+", help = "List of modules to load after preamble. Eg: R/3.3 python/3.6")
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "50", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 50")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
@@ -82,7 +83,6 @@ def parse_input():
 	else:
 		cmdsh = io.open(args.commandsfile, "rb")
 		cmds = cmdsh.read().strip().split('\n')
-
 	args.commands = cmds
 
 	## grab the executable of the first word of the first command
@@ -236,6 +236,11 @@ def write_qsub(args):
 	scripth.write("# Set path \n")
 	scripth.write("#SBATCH --export=PATH=" + str(args.path) + "\n")
 	
+	scripth.write("# Loading specified modules\n")
+	scripth.write("# \n")
+	if len(args.module) > 0:
+		for i in args.module:
+			scripth.write("module load " + i + "\n")
 	scripth.write("# \n")
 	scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 	scripth.write("echo \"  Started at:           \" `/bin/date` \n")
