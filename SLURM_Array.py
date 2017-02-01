@@ -45,7 +45,9 @@ def parse_input():
 	parser.add_argument('-c', '--commandsfile', required = False, dest = "commandsfile", default = "-", help = "The file to read commands from. Default: -, meaning standard input.")
 	parser.add_argument('-q', '--queue', required = False, dest = "queue", help = "The queue(s) to send the commands to. Default: all queues you have access to.")
 	parser.add_argument('-m', '--memory', required = False, dest = "memory", default = "4gb", help = "Amount of free RAM to request for each command, and the maximum that each can use without being killed. Default: 4gb")
-	parser.add_argument('-M', '--module', required = False, dest = "module", default = "", type = str, nargs = "+", help = "List of modules to load after preamble. Eg: R/3.3 python/3.6")
+	parser.add_argument('-l', '--module', required = False, dest = "module", default = "", type = str, nargs = "+", help = "List of modules to load after preamble. Eg: R/3.3 python/3.6")
+	parser.add_argument('-M', '--mail', required = False, dest = "mail", type = str, help = "Email address to send notifications to. Default: None")
+	parser.add_argument('--mailtype', required = False, dest = "mailtype", default = "ALL", type = str, help = "Type of email notification to be sent if -M is specified. Options: BEGIN, END, FAIL, ALL. Default: ALL")
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "50", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 50")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
@@ -58,6 +60,7 @@ def parse_input():
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 0.8.0.z.99: Added new options '-M' and '--mailtype' to email the user I also changed module flag to '-l' for "load module"
 		Version 0.7.0.z.99: Zhian Kamvar's translation to SLURM. Currently still a work in progress, but has basic functionality.
 		Version 0.6.8: --hold_names option now accepts regular expressions for holding against sets of jobs easily. Eg. --hold_names assembly_.+
 		Version 0.6.7.1: Fixed the -r option to now accept paths. e.g SGE_Array -c commands.txt -r logs_dir/log_dir. The "name" of the job (for --hold_names purposes) is logs_dir/log_dir; the SGE name is just log_dir.
@@ -236,6 +239,12 @@ def write_qsub(args):
 	
 	scripth.write("# Set path \n")
 	scripth.write("#SBATCH --export=PATH=" + str(args.path) + "\n")
+	
+	if args.mail != None:
+		scripth.write("# Email \n")
+		scripth.write("#SBATCH --mail-user=" + str(args.mail) + "\n")
+		scripth.write("# Email Type\n")
+		scripth.write("#SBATCH --mail-type=" + str(args.mailtype) + "\n")
 	
 	scripth.write("# Loading specified modules\n")
 	scripth.write("# \n")
