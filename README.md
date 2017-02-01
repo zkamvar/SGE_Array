@@ -61,13 +61,15 @@ so that you can easily organize your log information by time, and move/remove th
 Most of this can be changed, here's the help output:
 
 ```
-usage: SLURM_Array [-h] [-c COMMANDSFILE] [-q QUEUE] [-m MEMORY] [-f FILELIMIT]
-                 [-b CONCURRENCY] [-P PROCESSORS] [-r RUNDIR] [-p PATH]
-                 [--hold] [--hold_jids HOLD_JID_LIST]
-                 [--hold_names HOLD_NAME_LIST] [-v] [--showchangelog]
+usage: SLURM_Array.py [-h] [-c COMMANDSFILE] [-q QUEUE] [-m MEMORY]
+                      [-l MODULE [MODULE ...]] [-M MAIL] [--mailtype MAILTYPE]
+                      [-f FILELIMIT] [-b CONCURRENCY] [-P PROCESSORS]
+                      [-r RUNDIR] [-p PATH] [--hold]
+                      [--hold_jids HOLD_JID_LIST]
+                      [--hold_names HOLD_NAME_LIST] [-v] [--showchangelog]
 
-Runs a list of commands specified on stdin as an SLURM array job. Example usage:
-cat `commands.txt | SLURM_Array` or `SLURM_Array -c commands.txt`
+Runs a list of commands specified on stdin as a SLURM array job. Example
+usage: cat `commands.txt | SLURM_Array` or `SLURM_Array -c commands.txt`
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -81,9 +83,13 @@ optional arguments:
                         Amount of free RAM to request for each command, and
                         the maximum that each can use without being killed.
                         Default: 4gb
-  -M MODULE [MODULE ...], --module MODULE [MODULE ...]
+  -l MODULE [MODULE ...], --module MODULE [MODULE ...]
                         List of modules to load after preamble. Eg: R/3.3
                         python/3.6
+  -M MAIL, --mail MAIL  Email address to send notifications to. Default: None
+  --mailtype MAILTYPE   Type of email notification to be sent if -M is
+                        specified. Options: BEGIN, END, FAIL, ALL. Default:
+                        ALL
   -f FILELIMIT, --filelimit FILELIMIT
                         The largest file a command can create without being
                         killed. (Preserves fileservers.) Default: 500G
@@ -112,11 +118,11 @@ optional arguments:
                         151235' or '--hold_jid 151235,151239' )
   --hold_names HOLD_NAME_LIST
                         Hold the execution for these commands until these
-                        specific job IDs have finished (e.g. 'SLURM_Array -c
+                        specific job names have finished (comma-sep list);
+                        accepts regular expressions. (e.g. 'SLURM_Array -c
                         commands.txt -r this_job_name --hold_names
-                        previous_job_name'). Uses job information as logged to
-                        .slurm_array_jobnums. Currently only holds for most
-                        recent job with given name(s).
+                        previous_job_name,other_jobs_.+'). Uses job
+                        information as logged to .slurm_array_jobnums.
   -v, --version         show program's version number and exit
   --showchangelog       Show the changelog for this program.
 ```
@@ -145,6 +151,4 @@ echo 'runAssembly input.fasta -o assembly_output > log.txt' | SLURM_Array
 I'd like to have the thing read a config file called `.SLURM_Array` in `$HOME` so that the defaults
 for the options (`--path`, `--queue`, `--memory` etc.) can be adjusted to minimize typing in
 day-to-day usage.
-
-I still have to add an "email when complete option".
 
