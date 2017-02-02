@@ -45,6 +45,7 @@ def parse_input():
 	parser.add_argument('-c', '--commandsfile', required = False, dest = "commandsfile", default = "-", help = "The file to read commands from. Default: -, meaning standard input.")
 	parser.add_argument('-q', '--queue', required = False, dest = "queue", help = "The queue(s) to send the commands to. Default: all queues you have access to.")
 	parser.add_argument('-m', '--memory', required = False, dest = "memory", default = "4gb", help = "Amount of free RAM to request for each command, and the maximum that each can use without being killed. Default: 4gb")
+	parser.add_argument('-t', '--time', required = False, dest = "time", type = str, default = "04:00:00", help = "The maximum amount of time for the job to run in hh:mm:ss. Default: 04:00:00")
 	parser.add_argument('-l', '--module', required = False, dest = "module", default = "", type = str, nargs = "+", help = "List of modules to load after preamble. Eg: R/3.3 python/3.6")
 	parser.add_argument('-M', '--mail', required = False, dest = "mail", type = str, help = "Email address to send notifications to. Default: None")
 	parser.add_argument('--mailtype', required = False, dest = "mailtype", default = "ALL", type = str, help = "Type of email notification to be sent if -M is specified. Options: BEGIN, END, FAIL, ALL. Default: ALL")
@@ -52,11 +53,12 @@ def parse_input():
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "50", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 50")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
-	parser.add_argument('-p', '--path', required = False, dest = "path", help = "What to use as the PATH for the commands. Default: whatever is output by echo $PATH.")
+	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
 	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to $WORK/.slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
 	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to $WORK/.slurm_array_jobnums.")
 	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.8.1.z.99')
+	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
@@ -100,8 +102,6 @@ def parse_input():
 	if args.rundir == None:
 		rundir = args.timestamp
 		args.rundir = rundir
-	if args.path == None:
-		args.path = os.environ['PATH']	
 
 	args.rundir = re.subn(r"/$", "", args.rundir)[0]
 
@@ -181,25 +181,17 @@ def write_qsub(args):
 	scripth.write(textwrap.dedent('''\
 		#!/usr/bin/env bash
 		#
-		# This file created by SGE_Array
+		# This file created by SLURM_Array
 		#
-		# Export all environment variables
-		##SBATCH -V
-		#
-		# Use current working directory
-		##SBATCH -cwd
-		#
-		# Use bash as the executing shell
-		##SBATCH -S /bin/bash
 		# \n'''))
 	scripth.write("# Set job name \n")
 	scripth.write("#SBATCH --job-name=" + str(jobname) + "\n")
 	scripth.write("# \n")
 
-	#scripth.write("# Set task concurrency (max array jobs running simultaneously) \n")
-	#scripth.write("#SBATCH -tc " + str(args.concurrency) + "\n")
-	#scripth.write("# \n")
-	
+	scripth.write("# Set job time \n")
+	scripth.write("#SBATCH --time=" + args.time + "\n")
+	scripth.write("# \n")
+
 	scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
 	scripth.write("#SBATCH --array=1-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
 	scripth.write("# \n")
@@ -227,7 +219,7 @@ def write_qsub(args):
 			holdfor.extend(prev_jobs)
 		if len(holdfor) > 0:                    # if there's anything to hold for, actually do a hold ;)
 			scripth.write("# Hold for these job numbers, from $WORK/.slurm_array_jobnums and --hold_jid \n")
-			scripth.write("#SBATCH --depend=afterany:" + ":".join(holdfor) + "\n")
+			scripth.write("#SBATCH --dependency=afterany:" + ":".join(holdfor) + "\n")
 			scripth.write("# \n")
 
 	#scripth.write("# Set filelimit \n")
@@ -240,12 +232,14 @@ def write_qsub(args):
 	scripth.write("# \n")
 	
 	scripth.write("# Request some processors \n")
-	scripth.write("#SBATCH --mincpus=" + str(args.processors) + "\n")
+	scripth.write("#SBATCH --cpus-per-task=" + str(args.processors) + "\n")
 	scripth.write("# \n")
 	
-	scripth.write("# Set path \n")
-	scripth.write("#SBATCH --export=PATH=" + str(args.path) + "\n")
-	
+	if args.wd != None:
+		scripth.write("# Set working directory \n")
+		scripth.write("#SBATCH --workdir=" + args.wd + "\n")
+		scripth.write("# \n")
+
 	if args.mail != None:
 		scripth.write("# Email \n")
 		scripth.write("#SBATCH --mail-user=" + str(args.mail) + "\n")
@@ -296,6 +290,8 @@ args.rundir = os.path.expandvars("$WORK/" + args.rundir)
 make_rundir(args.rundir)
 write_commands(args.commands, args.rundir)
 write_qsub(args)
-exec_qsub(args)
+
+if not args.debug:
+	exec_qsub(args)
 
 
