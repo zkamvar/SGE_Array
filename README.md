@@ -61,12 +61,12 @@ so that you can easily organize your log information by time, and move/remove th
 Most of this can be changed, here's the help output:
 
 ```
-usage: SLURM_Array.py [-h] [-c COMMANDSFILE] [-q QUEUE] [-m MEMORY]
+usage: SLURM_Array.py [-h] [-c COMMANDSFILE] [-q QUEUE] [-m MEMORY] [-t TIME]
                       [-l MODULE [MODULE ...]] [-M MAIL] [--mailtype MAILTYPE]
                       [-f FILELIMIT] [-b CONCURRENCY] [-P PROCESSORS]
-                      [-r RUNDIR] [-p PATH] [--hold]
-                      [--hold_jids HOLD_JID_LIST]
-                      [--hold_names HOLD_NAME_LIST] [-v] [--showchangelog]
+                      [-r RUNDIR] [-w WD] [--hold] [--hold_jids HOLD_JID_LIST]
+                      [--hold_names HOLD_NAME_LIST] [-v] [-d]
+                      [--showchangelog]
 
 Runs a list of commands specified on stdin as a SLURM array job. Example
 usage: cat `commands.txt | SLURM_Array` or `SLURM_Array -c commands.txt`
@@ -83,6 +83,8 @@ optional arguments:
                         Amount of free RAM to request for each command, and
                         the maximum that each can use without being killed.
                         Default: 4gb
+  -t TIME, --time TIME  The maximum amount of time for the job to run in
+                        hh:mm:ss. Default: 04:00:00
   -l MODULE [MODULE ...], --module MODULE [MODULE ...]
                         List of modules to load after preamble. Eg: R/3.3
                         python/3.6
@@ -106,8 +108,8 @@ optional arguments:
                         commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-
                         SEC_<cmd>_etal' where <cmd> is the first word of the
                         first command.
-  -p PATH, --path PATH  What to use as the PATH for the commands. Default:
-                        whatever is output by echo $PATH.
+  -w WD, --working-directory WD
+                        Working directory to set. Defaults to nothing.
   --hold                Hold the execution for these commands until all
                         previous jobs arrays run from this directory have
                         finished. Uses the list of jobs as logged to
@@ -124,6 +126,7 @@ optional arguments:
                         previous_job_name,other_jobs_.+'). Uses job
                         information as logged to $WORK/.slurm_array_jobnums.
   -v, --version         show program's version number and exit
+  -d, --debug           Create the directory and script, but do not submit
   --showchangelog       Show the changelog for this program.
 
 ```
