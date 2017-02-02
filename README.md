@@ -111,7 +111,7 @@ optional arguments:
   --hold                Hold the execution for these commands until all
                         previous jobs arrays run from this directory have
                         finished. Uses the list of jobs as logged to
-                        .slurm_array_jobnums.
+                        $WORK/.slurm_array_jobnums.
   --hold_jids HOLD_JID_LIST
                         Hold the execution for these commands until these
                         specific job IDs have finished (e.g. '--hold_jid
@@ -122,9 +122,10 @@ optional arguments:
                         accepts regular expressions. (e.g. 'SLURM_Array -c
                         commands.txt -r this_job_name --hold_names
                         previous_job_name,other_jobs_.+'). Uses job
-                        information as logged to .slurm_array_jobnums.
+                        information as logged to $WORK/.slurm_array_jobnums.
   -v, --version         show program's version number and exit
   --showchangelog       Show the changelog for this program.
+
 ```
 
 It can also be used to run non-array jobs (though it will run it as an array of 1 command anyway). The cool
