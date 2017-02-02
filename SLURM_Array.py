@@ -63,6 +63,7 @@ def parse_input():
 		Version 0.8.1.z.99: Changed behavior so .slurm_array_jobnums is written to the $WORK directory.
 		Version 0.8.0.z.99: Added new options '-M' and '--mailtype' to email the user I also changed module flag to '-l' for "load module"
 		Version 0.7.0.z.99: Zhian Kamvar's translation to SLURM. Currently still a work in progress, but has basic functionality.
+		Version 0.6.8.1: Fixed bug so that -r option strips trailing slashes properly; e.g. -r log_dir/ now works properly
 		Version 0.6.8: --hold_names option now accepts regular expressions for holding against sets of jobs easily. Eg. --hold_names assembly_.+
 		Version 0.6.7.1: Fixed the -r option to now accept paths. e.g SGE_Array -c commands.txt -r logs_dir/log_dir. The "name" of the job (for --hold_names purposes) is logs_dir/log_dir; the SGE name is just log_dir.
 		Version 0.6.7: Added new option --hold_names for holding for specific job names.
@@ -101,6 +102,8 @@ def parse_input():
 		args.rundir = rundir
 	if args.path == None:
 		args.path = os.environ['PATH']	
+
+	args.rundir = re.subn(r"/$", "", args.rundir)[0]
 
 	return args
 
@@ -177,6 +180,8 @@ def write_qsub(args):
 
 	scripth.write(textwrap.dedent('''\
 		#!/usr/bin/env bash
+		#
+		# This file created by SGE_Array
 		#
 		# Export all environment variables
 		##SBATCH -V
