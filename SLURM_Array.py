@@ -53,9 +53,9 @@ def parse_input():
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-p', '--path', required = False, dest = "path", help = "What to use as the PATH for the commands. Default: whatever is output by echo $PATH.")
-	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
+	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to $WORK/.slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
-	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
+	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to $WORK/.slurm_array_jobnums.")
 	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.7.0.z.99')
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
@@ -105,8 +105,8 @@ def parse_input():
 
 def get_hold_jobs():
 	jobslist = list()
-	if os.path.isfile(".slurm_array_jobnums"):
-		fhandle = io.open(".slurm_array_jobnums", "rb")
+	if os.path.isfile(SAJ):
+		fhandle = io.open(SAJ, "rb")
 		for line in fhandle:
 			line_list = line.strip().split('\t')
 			jobnum = line_list[0].split('.')[0]
@@ -119,8 +119,8 @@ def get_hold_jobs():
 def get_hold_jobs_by_names(names):
 	jobslist = list()
 	job_names_to_nums = dict()
-	if os.path.isfile(".slurm_array_jobnums"):
-		fhandle = io.open(".slurm_array_jobnums", "rb")
+	if os.path.isfile(SAJ):
+		fhandle = io.open(SAJ, "rb")
 		for line in fhandle:
 			line_list = line.strip().split('\t')
 			jobnum = line_list[0].split('.')[0]
@@ -137,7 +137,7 @@ def get_hold_jobs_by_names(names):
 				found = True
 				
 		if not found:
-			sys.stderr.write("Warning: job " + name + " does not match any job name in .slurm_array_jobnums; cannot hold for this job.\n")
+			sys.stderr.write("Warning: job " + name + " does not match any job name in " + SAJ + "; cannot hold for this job.\n")
 
 		## Previous: before using regex matching
 		#if job_names_to_nums.has_key(name):
@@ -220,7 +220,7 @@ def write_qsub(args):
 			prev_jobs = get_hold_jobs()
 			holdfor.extend(prev_jobs)
 		if len(holdfor) > 0:                    # if there's anything to hold for, actually do a hold ;)
-			scripth.write("# Hold for these job numbers, from .slurm_array_jobnums and --hold_jid \n")
+			scripth.write("# Hold for these job numbers, from $WORK/.slurm_array_jobnums and --hold_jid \n")
 			scripth.write("#SBATCH --depend=afterany:" + ":".join(holdfor) + "\n")
 			scripth.write("# \n")
 
@@ -281,10 +281,11 @@ def exec_qsub(args):
 		quit()
 	
 	jobnum = res.strip()
-	print("Successfully submitted job " + jobnum + ", logging job number, timestamp, and rundir to .slurm_array_jobnums")
-	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> .slurm_array_jobnums", shell = True)
+	print("Successfully submitted job " + jobnum + ", logging job number, timestamp, and rundir to " + SAJ)
+	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> " + SAJ, shell = True)
 
 args = parse_input()
+SAJ = os.path.expandvars("$WORK/.slurm_array_jobnums") # hidden job file will always be stored in the $WORK directory
 args.rundir = os.path.expandvars("$WORK/" + args.rundir)
 make_rundir(args.rundir)
 write_commands(args.commands, args.rundir)
