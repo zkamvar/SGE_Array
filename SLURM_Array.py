@@ -57,11 +57,12 @@ def parse_input():
 	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to $WORK/.slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
 	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to $WORK/.slurm_array_jobnums.")
-	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.9.0.z.99')
+	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.9.1.z.99')
 	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 0.9.1.z.99: Changed behavior back so that rundir is created relative to the current working directory.
 		Version 0.9.0.z.99: Added new options '-t', '-d', and '-w' to set the time, a debugging flag, and working directory.
 		Version 0.8.1.z.99: Changed behavior so .slurm_array_jobnums is written to the $WORK directory.
 		Version 0.8.0.z.99: Added new options '-M' and '--mailtype' to email the user I also changed module flag to '-l' for "load module"
@@ -287,7 +288,6 @@ def exec_qsub(args):
 
 args = parse_input()
 SAJ = os.path.expandvars("$WORK/.slurm_array_jobnums") # hidden job file will always be stored in the $WORK directory
-args.rundir = os.path.expandvars("$WORK/" + args.rundir)
 make_rundir(args.rundir)
 write_commands(args.commands, args.rundir)
 write_qsub(args)
