@@ -283,7 +283,7 @@ def exec_qsub(args):
 		shutil.rmtree(args.rundir)
 		quit()
 	
-	jobnum = res.strip()
+	jobnum = re.subn("[A-Za-z ]", "", res.strip())[0]
 	print("Successfully submitted job " + jobnum + ", logging job number, timestamp, and rundir to " + SAJ)
 	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> " + SAJ, shell = True)
 
