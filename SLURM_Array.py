@@ -50,7 +50,7 @@ def parse_input():
 	parser.add_argument('-M', '--mail', required = False, dest = "mail", type = str, help = "Email address to send notifications to. Default: None")
 	parser.add_argument('--mailtype', required = False, dest = "mailtype", default = "ALL", type = str, help = "Type of email notification to be sent if -M is specified. Options: BEGIN, END, FAIL, ALL. Default: ALL")
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
-	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "2000", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 2000")
+	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "1000", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 1000")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
@@ -58,11 +58,12 @@ def parse_input():
 	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
 	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
-	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.10.0.z.99')
+	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.11.1.z.99')
 	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 0.11.1.z.99: Update concurrency to 1000
 		Version 0.11.0.z.99: Revert behavior to write.slurm_array_jobnums to current working directory.
 		Version 0.10.0.z.99: Add the -H command to act as -H on SLURM clusters
 		Version 0.9.2.z.99: Concurrency default set to 2000 based on speaking with HCC people.
