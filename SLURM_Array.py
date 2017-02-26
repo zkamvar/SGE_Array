@@ -55,14 +55,15 @@ def parse_input():
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
 	parser.add_argument('-H', required = False, action = 'store_true', dest = "HOLD", help = "Hold the execution for these commands until you release them via scontrol release <JOB-ID>")
-	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to $WORK/.slurm_array_jobnums.")
+	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
-	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to $WORK/.slurm_array_jobnums.")
+	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
 	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 0.10.0.z.99')
 	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 0.11.0.z.99: Revert behavior to write.slurm_array_jobnums to current working directory.
 		Version 0.10.0.z.99: Add the -H command to act as -H on SLURM clusters
 		Version 0.9.2.z.99: Concurrency default set to 2000 based on speaking with HCC people.
 		Version 0.9.1.z.99: Changed behavior back so that rundir is created relative to the current working directory.
@@ -223,7 +224,7 @@ def write_qsub(args):
 			prev_jobs = get_hold_jobs()
 			holdfor.extend(prev_jobs)
 		if len(holdfor) > 0:                    # if there's anything to hold for, actually do a hold ;)
-			scripth.write("# Hold for these job numbers, from $WORK/.slurm_array_jobnums and --hold_jid \n")
+			scripth.write("# Hold for these job numbers, from .slurm_array_jobnums and --hold_jid \n")
 			scripth.write("#SBATCH --dependency=afterany:" + ":".join(holdfor) + "\n")
 			scripth.write("# \n")
 	if args.HOLD:
@@ -300,7 +301,7 @@ def exec_qsub(args):
 	subprocess.check_output("echo '" + jobnum + "\t" + args.timestamp + "\t" + args.rundir + "' >> " + SAJ, shell = True)
 
 args = parse_input()
-SAJ = os.path.expandvars("$WORK/.slurm_array_jobnums") # hidden job file will always be stored in the $WORK directory
+SAJ = ".slurm_array_jobnums" 
 make_rundir(args.rundir)
 write_commands(args.commands, args.rundir)
 write_qsub(args)
