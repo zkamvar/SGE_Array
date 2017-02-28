@@ -51,6 +51,7 @@ def parse_input():
 	parser.add_argument('--mailtype', required = False, dest = "mailtype", default = "ALL", type = str, help = "Type of email notification to be sent if -M is specified. Options: BEGIN, END, FAIL, ALL. Default: ALL")
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "1000", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 1000")
+	parser.add_argument('-x', '--maxcommands', required = False, dest = "max-commands", default = 900, type = int, help = "Maximum number of commands that can be submitted with one submission script. If the number of commands exceeds this number, they will be batched in separate array jobs. Default: 900")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
@@ -262,21 +263,38 @@ def write_qsub(args):
 	if len(args.module) > 0:
 		for i in args.module:
 			scripth.write("module load " + i + "\n")
-	scripth.write("# \n")
-	scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
-	scripth.write("echo \"  Started at:           \" `/bin/date` \n")
+	if (len(args.commands) <= args.maxcommands):
+		scripth.write("# \n")
+		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
+		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
 
-	scripth.write("# Run the command through time with memory and such reporting. \n")
-	scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
-	scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
-	scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
-	scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
-	scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-	scripth.write("echo \"  Finished at:           \" `date` \n")
-	
+		scripth.write("# Run the command through time with memory and such reporting. \n")
+		scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
+		scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
+		scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
+		scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
+		scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("echo \"  Finished at:           \" `date` \n")
+	else:
+		NRUNS = math.ceil(len(args.commands)/float(args.maxcommands)) # Number of runs this dang thing will take
+		scripth.write("# \n")
+		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
+		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
+
+		scripth.write("# Run the command through time with memory and such reporting. \n")
+		scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
+		scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
+		scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
+		scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
+		scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("echo \"  Finished at:           \" `date` \n")
+			
 	scripth.close()
 
 
