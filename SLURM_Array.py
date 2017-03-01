@@ -32,6 +32,7 @@ import io
 import re
 import argparse
 import datetime
+from datetime import timedelta
 import os
 import subprocess
 import shutil
@@ -45,13 +46,14 @@ def parse_input():
 	parser.add_argument('-c', '--commandsfile', required = False, dest = "commandsfile", default = "-", help = "The file to read commands from. Default: -, meaning standard input.")
 	parser.add_argument('-q', '--queue', required = False, dest = "queue", help = "The queue(s) to send the commands to. Default: all queues you have access to.")
 	parser.add_argument('-m', '--memory', required = False, dest = "memory", default = "4gb", help = "Amount of free RAM to request for each command, and the maximum that each can use without being killed. Default: 4gb")
-	parser.add_argument('-t', '--time', required = False, dest = "time", type = str, default = "04:00:00", help = "The maximum amount of time for the job to run in hh:mm:ss. Default: 04:00:00")
+	parser.add_argument('-t', '--time', required = False, dest = "time", type = str, default = "04:00:00", help = "The maximum amount of time for the job to run in d-hh:mm:ss. Default: 04:00:00")
 	parser.add_argument('-l', '--module', required = False, dest = "module", default = "", type = str, nargs = "+", help = "List of modules to load after preamble. Eg: R/3.3 python/3.6")
 	parser.add_argument('-M', '--mail', required = False, dest = "mail", type = str, help = "Email address to send notifications to. Default: None")
 	parser.add_argument('--mailtype', required = False, dest = "mailtype", default = "ALL", type = str, help = "Type of email notification to be sent if -M is specified. Options: BEGIN, END, FAIL, ALL. Default: ALL")
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "1000", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 1000")
-	parser.add_argument('-x', '--maxcommands', required = False, dest = "max-commands", default = 900, type = int, help = "Maximum number of commands that can be submitted with one submission script. If the number of commands exceeds this number, they will be batched in separate array jobs. Default: 900")
+	parser.add_argument('-x', '--maxcommands', required = False, dest = "maxcommands", default = 900, type = int, help = "Maximum number of commands that can be submitted with one submission script. If the number of commands exceeds this number, they will be batched in separate array jobs. Default: 900")
+	parser.add_argument('--duration', required = FALSE, dest = "duration", default = "24:00:00", type = str, help = "Duration expected for each of maxcommands to run in d-hh:mm:ss. This will be multiplied by the number of batches needed to run.")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
@@ -114,6 +116,55 @@ def parse_input():
 	args.rundir = re.subn(r"/$", "", args.rundir)[0]
 
 	return args
+
+def get_nruns(args):
+	return math.ceil(len(args.commands)/float(args.maxcommands))
+
+def too_many_commands(args):
+	return len(args.commands) > args.maxcommands
+
+def get_duration(the_time):
+	# Acceptable time formats include 
+	# "minutes", 
+	# "minutes:seconds", 
+	# "hours:minutes:seconds", 
+	# "days-hours", 
+	# "days-hours:minutes" and 
+	# "days-hours:minutes:seconds".
+	jobtime = the_time.split('-')
+	days    = 0
+	hours   = 0
+	minutes = 0
+	seconds = 0
+	if len(jobtime) == 2:
+		days    = jobtime[0]
+		jobtime = jobtime[1]
+	else:
+		jobtime = jobtime[0]
+	jobtime = jobtime.split(":")
+	if len(jobtime) == 1:
+		if days is not 0:
+			minutes = jobtime[0]
+		else:
+			hours = jobtime[0]
+	elif len(jobtime) == 2:
+		if days is not 0:
+			hours   = jobtime[0]
+			minutes = jobtime[1]
+		else:
+			minutes = jobtime[0]
+			seconds = jobtime[1]
+	else:
+		hours    = jobtime[0]
+		minutes  = jobtime[1]
+		seconds  = jobtime[2]
+	duration = timedelta(days = int(days), hours = int(hours), minutes = int(minutes), seconds = int(seconds))
+	return duration
+
+def get_new_duration(args):
+	NRUNS = get_nruns(args)
+	duration = get_duration(args.duration) * NRUNS
+	return "-".join(str(duration).split(" days, "))
 
 def get_hold_jobs():
 	jobslist = list()
@@ -185,6 +236,7 @@ def write_commands(cmds, rundir):
 def write_qsub(args):
 	jobname = os.path.basename(args.rundir)
 	scripth = io.open(args.rundir + "/" + jobname + ".sh", "wb")
+	NRUNS   = get_nruns(args)
 
 	scripth.write(textwrap.dedent('''\
 		#!/usr/bin/env bash
@@ -197,12 +249,18 @@ def write_qsub(args):
 	scripth.write("# \n")
 
 	scripth.write("# Set job time \n")
-	scripth.write("#SBATCH --time=" + args.time + "\n")
-	scripth.write("# \n")
-
-	scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
-	scripth.write("#SBATCH --array=1-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
-	scripth.write("# \n")
+	if not too_many_commands(args):
+		scripth.write("#SBATCH --time=" + args.time + "\n")
+		scripth.write("# \n")
+		scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
+		scripth.write("#SBATCH --array=1-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
+		scripth.write("# \n")
+	else:
+		scripth.write("#SBATCH --time=" + get_new_duration(args) + "\n")
+		scripth.write("# \n")
+		scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
+		scripth.write("#SBATCH --array=1-" + str(NRUNS) + "\n")
+		scripth.write("# \n")
 
 	scripth.write("# Output files for stdout and stderr \n")
 	scripth.write("#SBATCH --output=" + args.rundir + "/" + jobname + ".%A_%a.out\n")
@@ -263,7 +321,7 @@ def write_qsub(args):
 	if len(args.module) > 0:
 		for i in args.module:
 			scripth.write("module load " + i + "\n")
-	if (len(args.commands) <= args.maxcommands):
+	if not too_many_commands(args):
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
@@ -279,7 +337,6 @@ def write_qsub(args):
 		scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
 		scripth.write("echo \"  Finished at:           \" `date` \n")
 	else:
-		NRUNS = math.ceil(len(args.commands)/float(args.maxcommands)) # Number of runs this dang thing will take
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
