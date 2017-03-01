@@ -354,7 +354,7 @@ def write_qsub(args):
 		scripth.write("# Run the command through time with memory and such reporting. \n")
 		scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
 		scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
-		scripth.write("nruns=" + str(NRUNS + 1) + "\n")
+		scripth.write("nruns=" + str(NRUNS) + "\n")
 		scripth.write("for (( c = 0; c < nruns; c++ )) ; do\n")
 		scripth.write("	cmdcmd=`sed -n \"$((1 + SLURM_ARRAY_TASK_ID * nruns + c)) p\" " + args.rundir + "/commands.txt`\n")
 		scripth.write("	if [ -n \"${cmdcmd}\" ] ; then\n")
