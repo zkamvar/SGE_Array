@@ -30,6 +30,7 @@
 import sys
 import io
 import re
+import math
 import argparse
 import datetime
 from datetime import timedelta
@@ -53,7 +54,7 @@ def parse_input():
 	parser.add_argument('-f', '--filelimit', required = False, dest = "filelimit", default = "500G", help = "The largest file a command can create without being killed. (Preserves fileservers.) Default: 500G")
 	parser.add_argument('-b', '--concurrency', required = False, dest = "concurrency", default = "1000", help = "Maximum number of commands that can be run simultaneously across any number of machines. (Preserves network resources.) Default: 1000")
 	parser.add_argument('-x', '--maxcommands', required = False, dest = "maxcommands", default = 900, type = int, help = "Maximum number of commands that can be submitted with one submission script. If the number of commands exceeds this number, they will be batched in separate array jobs. Default: 900")
-	parser.add_argument('--duration', required = FALSE, dest = "duration", default = "24:00:00", type = str, help = "Duration expected for each of maxcommands to run in d-hh:mm:ss. This will be multiplied by the number of batches needed to run.")
+	parser.add_argument('--duration', required = False, dest = "duration", default = "24:00:00", type = str, help = "Duration expected for each of maxcommands to run in d-hh:mm:ss. This will be multiplied by the number of batches needed to run.")
 	parser.add_argument('-P', '--processors', required = False, dest = "processors", default = "1", help = "Number of processors to reserve for each command. Default: 1")
 	parser.add_argument('-r', '--rundir', required = False, dest = "rundir", help = "Job name and the directory to create or OVERWRITE to store log information and standard output of the commands. Default: 'jYEAR-MON-DAY_HOUR-MIN-SEC_<cmd>_etal' where <cmd> is the first word of the first command.")
 	parser.add_argument('-w', '--working-directory', required = False, dest = "wd", type = str, help = "Working directory to set. Defaults to nothing.")
@@ -118,7 +119,7 @@ def parse_input():
 	return args
 
 def get_nruns(args):
-	return math.ceil(len(args.commands)/float(args.maxcommands))
+	return int(math.ceil(len(args.commands)/float(args.maxcommands)))
 
 def too_many_commands(args):
 	return len(args.commands) > args.maxcommands
@@ -234,9 +235,10 @@ def write_commands(cmds, rundir):
 
 ########## write the qsub script to args.rundir/args.rundir.sh
 def write_qsub(args):
-	jobname = os.path.basename(args.rundir)
-	scripth = io.open(args.rundir + "/" + jobname + ".sh", "wb")
-	NRUNS   = get_nruns(args)
+	jobname    = os.path.basename(args.rundir)
+	scripth    = io.open(args.rundir + "/" + jobname + ".sh", "wb")
+	NRUNS      = get_nruns(args)
+
 
 	scripth.write(textwrap.dedent('''\
 		#!/usr/bin/env bash
@@ -292,17 +294,19 @@ def write_qsub(args):
 		scripth.write("#SBATCH -H \n")
 		scripth.write("# \n")
 
-	#scripth.write("# Set filelimit \n")
-	#scripth.write("#SBATCH -l h_fsize=" + str(args.filelimit) + "\n")
-	#scripth.write("# \n")
-	
 	scripth.write("# Set memory requested and max memory \n")
-	scripth.write("#SBATCH --mem=" + str(args.memory) + "\n")
-	#scripth.write("#SBATCH -l h_vmem=" + str(args.memory) + "\n")
+	if not too_many_commands(args):
+		scripth.write("#SBATCH --mem=" + str(args.memory) + "\n")
+	else:
+		scripth.write("#SBATCH --mem=4gb\n")
+
 	scripth.write("# \n")
 	
 	scripth.write("# Request some processors \n")
-	scripth.write("#SBATCH --cpus-per-task=" + str(args.processors) + "\n")
+	if not too_many_commands(args):
+		scripth.write("#SBATCH --cpus-per-task=" + str(args.processors) + "\n")
+	else:
+		scripth.write("#SBATCH --cpus-per-task=1\n")
 	scripth.write("# \n")
 	
 	if args.wd != None:
@@ -322,6 +326,8 @@ def write_qsub(args):
 		for i in args.module:
 			scripth.write("module load " + i + "\n")
 	if not too_many_commands(args):
+		jobsuffix  = ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n"
+		outfile = args.rundir + "/command." + jobname + jobsuffix
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
@@ -330,26 +336,47 @@ def write_qsub(args):
 		scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
 		scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
 		scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
-		scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-		scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-		scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("echo \#!/usr/bin/env bash > " + outfile)
+		scripth.write("echo $cmdcmd >> " + outfile)
+		scripth.write("chmod u+x " + outfile)
 		scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
-		scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write(outfile)
 		scripth.write("echo \"  Finished at:           \" `date` \n")
 	else:
+		jobsuffix  = ".%A_%a_%s"
+		outfile = args.rundir + "/command." + jobname + jobsuffix + ".txt\n"
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
-
 		scripth.write("# Run the command through time with memory and such reporting. \n")
 		scripth.write("# warning: there is an old bug in GNU time that overreports memory usage \n")
 		scripth.write("# by 4x; this is compensated for in the SGE_Plotdir script. \n")
-		scripth.write("cmdcmd=`sed \"$SLURM_ARRAY_TASK_ID q;d\" " + args.rundir + "/commands.txt`\n")
-		scripth.write("echo \#!/usr/bin/env bash > " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-		scripth.write("echo $cmdcmd >> " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-		scripth.write("chmod u+x " + args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
-		scripth.write("/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
-		scripth.write(args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID.txt\n")
+		scripth.write("nruns=" + str(NRUNS) + "\n")
+		scripth.write("for (( c = 0; c < nruns+1; c++ )) ; do\n")
+		scripth.write("\tcmdcmd=`sed -n \"$((SLURM_ARRAY_TASK_ID * nruns + c)) p\" " + args.rundir + "/commands.txt`\n")
+		scripth.write("\tif [ -n \"${cmdcmd}\" ] ; then\n")
+		# Writing to outfile
+		scripth.write("\t\tprintf '#!/usr/bin/env bash\\n' > " + outfile)
+		scripth.write("\t\tprintf 'echo \"  Started on:           \" `/bin/hostname -s` \\n' >>" + outfile)
+		scripth.write("\t\tprintf 'echo \"  Started at:           \" `/bin/date` \\n' >> " + outfile)
+		scripth.write("\t\techo $cmdcmd >> " + outfile)
+		scripth.write("\t\tprintf 'echo \"  Finished at:           \" `date` \\n' >> " + outfile)
+		scripth.write("\t\t# run the command in this Slurm array job allocation in a separate\n")
+		scripth.write("\t\t# Slurm job step\n")
+		scripth.write("\t\t# --------------------------------------------------------------\n")
+		scripth.write("\t\tchmod u+x " + outfile + "\n")
+		# Running the command
+		scripth.write("\t\tsrun \\\n")
+		scripth.write("\t\t\t--mem=" + args.memory + " \\\n")
+		scripth.write("\t\t\t--time=" + args.time + " \\\n")
+		scripth.write("\t\t\t--cpus-per-task=" + args.processors + " \\\n")
+		scripth.write("\t\t\t--output=" + args.rundir + "/" + jobname + jobsuffix + ".out \\\n")
+		scripth.write("\t\t\t--error="  + args.rundir + "/" + jobname + jobsuffix + ".err \\\n")
+		scripth.write("\t\t\t/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
+		scripth.write("\t\t\t" + outfile)
+		scripth.write("\telse\n\t\techo \"Line $((SLURM_ARRAY_TASK_ID * nruns + c)) missing from commands.txt, skipping\"\n")
+		scripth.write("\tfi\n")
+		scripth.write("done\n")
 		scripth.write("echo \"  Finished at:           \" `date` \n")
 			
 	scripth.close()
