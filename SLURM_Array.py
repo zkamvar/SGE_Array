@@ -255,7 +255,7 @@ def write_qsub(args):
 		scripth.write("#SBATCH --time=" + args.time + "\n")
 		scripth.write("# \n")
 		scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
-		scripth.write("#SBATCH --array=1-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
+		scripth.write("#SBATCH --array=0-" + str(len(args.commands)) + "%" + str(args.concurrency) + "\n")
 		scripth.write("# \n")
 	else:
 		scripth.write("#SBATCH --time=" + get_new_duration(args) + "\n")
