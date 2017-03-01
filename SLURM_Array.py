@@ -344,7 +344,7 @@ def write_qsub(args):
 		scripth.write("echo \"  Finished at:           \" `date` \n")
 	else:
 		jobsuffix  = ".%A_%a_%s"
-		outfile = args.rundir + "/command." + jobname + jobsuffix + ".txt\n"
+		outfile = args.rundir + "/command." + jobname + ".%A_%a_$c.txt\n"
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
@@ -357,7 +357,7 @@ def write_qsub(args):
 		scripth.write("\tif [ -n \"${cmdcmd}\" ] ; then\n")
 		# Writing to outfile
 		scripth.write("\t\tprintf '#!/usr/bin/env bash\\n' > " + outfile)
-		scripth.write("\t\tprintf 'echo \"  Started on:           \" `/bin/hostname -s` \\n' >>" + outfile)
+		scripth.write("\t\tprintf 'echo \"  Started on:           \" `/bin/hostname -s` \\n' >> " + outfile)
 		scripth.write("\t\tprintf 'echo \"  Started at:           \" `/bin/date` \\n' >> " + outfile)
 		scripth.write("\t\techo $cmdcmd >> " + outfile)
 		scripth.write("\t\tprintf 'echo \"  Finished at:           \" `date` \\n' >> " + outfile)
