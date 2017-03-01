@@ -344,7 +344,7 @@ def write_qsub(args):
 		scripth.write("echo \"  Finished at:           \" `date` \n")
 	else:
 		jobsuffix  = ".%A_%a_%s"
-		outfile = args.rundir + "/command." + jobname + ".$SLURM_ARRAY_JOB_ID_$SLURM_ARRAY_TASK_ID_$c.txt\n"
+		outfile = args.rundir + "/command." + jobname + ".${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_${c}.txt\n"
 		scripth.write("# \n")
 		scripth.write("echo \"  Started on:           \" `/bin/hostname -s` \n")
 		scripth.write("echo \"  Started at:           \" `/bin/date` \n")
