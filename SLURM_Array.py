@@ -119,7 +119,10 @@ def parse_input():
 	return args
 
 def get_nruns(args):
-	return int(math.ceil(len(args.commands)/float(args.maxcommands)))
+	cmds    = len(args.commands)
+	maxcmds = args.maxcommands
+	NRUNS   = int(math.ceil(cmds/float(maxcmds)))
+	return NRUNS
 
 def too_many_commands(args):
 	return len(args.commands) > args.maxcommands
@@ -260,8 +263,8 @@ def write_qsub(args):
 	else:
 		scripth.write("#SBATCH --time=" + get_new_duration(args) + "\n")
 		scripth.write("# \n")
-		scripth.write("# Set array job range (1 to number of commands in cmd file) and concurrency (%N) \n")
-		scripth.write("#SBATCH --array=1-" + str(NRUNS) + "\n")
+		scripth.write("# Set array job range (0 to number of commands in cmd file (minus 1)) and concurrency (%N) \n")
+		scripth.write("#SBATCH --array=0-" + str(args.maxcommands - 1) + "\n")
 		scripth.write("# \n")
 
 	scripth.write("# Output files for stdout and stderr \n")
