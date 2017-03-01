@@ -137,7 +137,7 @@ def get_duration(the_time):
 	minutes = 0
 	seconds = 0
 	if len(jobtime) == 2:
-		days    = jobtime[0]
+		days    = int(jobtime[0])
 		jobtime = jobtime[1]
 	else:
 		jobtime = jobtime[0]
