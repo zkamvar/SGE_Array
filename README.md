@@ -63,8 +63,9 @@ Most of this can be changed, here's the help output:
 ```
 usage: SLURM_Array.py [-h] [-c COMMANDSFILE] [-q QUEUE] [-m MEMORY] [-t TIME]
                       [-l MODULE [MODULE ...]] [-M MAIL] [--mailtype MAILTYPE]
-                      [-f FILELIMIT] [-b CONCURRENCY] [-P PROCESSORS]
-                      [-r RUNDIR] [-w WD] [--hold] [--hold_jids HOLD_JID_LIST]
+                      [-f FILELIMIT] [-b CONCURRENCY] [-x MAXCOMMANDS]
+                      [--duration DURATION] [-P PROCESSORS] [-r RUNDIR]
+                      [-w WD] [-H] [--hold] [--hold_jids HOLD_JID_LIST]
                       [--hold_names HOLD_NAME_LIST] [-v] [-d]
                       [--showchangelog]
 
@@ -84,7 +85,7 @@ optional arguments:
                         the maximum that each can use without being killed.
                         Default: 4gb
   -t TIME, --time TIME  The maximum amount of time for the job to run in
-                        hh:mm:ss. Default: 04:00:00
+                        d-hh:mm:ss. Default: 04:00:00
   -l MODULE [MODULE ...], --module MODULE [MODULE ...]
                         List of modules to load after preamble. Eg: R/3.3
                         python/3.6
@@ -98,7 +99,15 @@ optional arguments:
   -b CONCURRENCY, --concurrency CONCURRENCY
                         Maximum number of commands that can be run
                         simultaneously across any number of machines.
-                        (Preserves network resources.) Default: 50
+                        (Preserves network resources.) Default: 1000
+  -x MAXCOMMANDS, --maxcommands MAXCOMMANDS
+                        Maximum number of commands that can be submitted with
+                        one submission script. If the number of commands
+                        exceeds this number, they will be batched in separate
+                        array jobs. Default: 900
+  --duration DURATION   Duration expected for each of maxcommands to run in
+                        d-hh:mm:ss. This will be multiplied by the number of
+                        batches needed to run.
   -P PROCESSORS, --processors PROCESSORS
                         Number of processors to reserve for each command.
                         Default: 1
@@ -110,10 +119,12 @@ optional arguments:
                         first command.
   -w WD, --working-directory WD
                         Working directory to set. Defaults to nothing.
+  -H                    Hold the execution for these commands until you
+                        release them via scontrol release <JOB-ID>
   --hold                Hold the execution for these commands until all
                         previous jobs arrays run from this directory have
                         finished. Uses the list of jobs as logged to
-                        $WORK/.slurm_array_jobnums.
+                        .slurm_array_jobnums.
   --hold_jids HOLD_JID_LIST
                         Hold the execution for these commands until these
                         specific job IDs have finished (e.g. '--hold_jid
@@ -124,7 +135,7 @@ optional arguments:
                         accepts regular expressions. (e.g. 'SLURM_Array -c
                         commands.txt -r this_job_name --hold_names
                         previous_job_name,other_jobs_.+'). Uses job
-                        information as logged to $WORK/.slurm_array_jobnums.
+                        information as logged to .slurm_array_jobnums.
   -v, --version         show program's version number and exit
   -d, --debug           Create the directory and script, but do not submit
   --showchangelog       Show the changelog for this program.
