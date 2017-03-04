@@ -62,11 +62,12 @@ def parse_input():
 	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
 	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
-	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 1.0.2.z.99')
+	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 1.0.3.z.99')
 	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 1.0.3.z.99: removed workdir argument from srun
 		Version 1.0.2.z.99: Fixed bug where multiple tasks were running for each command when maxcommands was exceeded.
 		Version 1.0.1.z.99: Add working directory argument and comments to maxcommands jobs
 		Version 1.0.0.z.99: This version now has maxcommands and duration for running 1000s of jobs on the cluster. I've also changed the behavior so that the output files index from zero. It's a big change, so that's why I'm incrementing it.
@@ -385,8 +386,6 @@ def write_qsub(args):
 		scripth.write("		--ntasks=1 \\\n")
 		scripth.write("		--output=" + args.rundir + "/" + jobname + jobsuffix + ".out \\\n")
 		scripth.write("		--error="  + args.rundir + "/" + jobname + jobsuffix + ".err \\\n")
-		if args.wd is not None:
-			scripth.write("		--workdir=" + args.wd + " \\\n")
 		scripth.write("		/usr/bin/env time -f \" \\\\tFull Command:                      %C \\\\n\\\\tMemory (kb):                       %M \\\\n\\\\t# SWAP  (freq):                    %W \\\\n\\\\t# Waits (freq):                    %w \\\\n\\\\tCPU (percent):                     %P \\\\n\\\\tTime (seconds):                    %e \\\\n\\\\tTime (hh:mm:ss.ms):                %E \\\\n\\\\tSystem CPU Time (seconds):         %S \\\\n\\\\tUser   CPU Time (seconds):         %U \" \\\n")
 		scripth.write("		" + outfile)
 		scripth.write("	else\n\t\techo \"Line $((1 + SLURM_ARRAY_TASK_ID * nsteps + c)) missing from commands.txt, skipping\"\n")
