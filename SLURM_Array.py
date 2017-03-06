@@ -62,11 +62,12 @@ def parse_input():
 	parser.add_argument('--hold', required = False, action = 'store_true', dest = "hold", help = "Hold the execution for these commands until all previous jobs arrays run from this directory have finished. Uses the list of jobs as logged to .slurm_array_jobnums.")
 	parser.add_argument('--hold_jids', required = False, dest = "hold_jid_list", help = "Hold the execution for these commands until these specific job IDs have finished (e.g. '--hold_jid 151235' or '--hold_jid 151235,151239' )")
 	parser.add_argument('--hold_names', required = False, dest = "hold_name_list", help = "Hold the execution for these commands until these specific job names have finished (comma-sep list); accepts regular expressions. (e.g. 'SLURM_Array -c commands.txt -r this_job_name --hold_names previous_job_name,other_jobs_.+'). Uses job information as logged to .slurm_array_jobnums.")
-	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 1.0.3.z.99')
+	parser.add_argument('-v', '--version', action = 'version', version = '%(prog)s 1.0.4.z.99')
 	parser.add_argument('-d', '--debug', action = 'store_true', dest = "debug", help = "Create the directory and script, but do not submit")
 	parser.add_argument('--showchangelog', required = False, action = 'store_true', dest = "showchangelog", help = "Show the changelog for this program.")
 
 	changelog = textwrap.dedent('''\
+		Version 1.0.4.z.99: when maxcommands are exceeded, memory and cpus are not reset
 		Version 1.0.3.z.99: removed workdir argument from srun
 		Version 1.0.2.z.99: Fixed bug where multiple tasks were running for each command when maxcommands was exceeded.
 		Version 1.0.1.z.99: Add working directory argument and comments to maxcommands jobs
@@ -302,17 +303,13 @@ def write_qsub(args):
 		scripth.write("# \n")
 
 	scripth.write("# Set memory requested and max memory \n")
-	if not too_many_commands(args):
-		scripth.write("#SBATCH --mem=" + str(args.memory) + "\n")
-	else:
-		scripth.write("#SBATCH --mem=4gb\n")
+	scripth.write("#SBATCH --mem=" + str(args.memory) + "\n")
 
 	scripth.write("# \n")
 	
 	scripth.write("# Request some processors \n")
+	scripth.write("#SBATCH --cpus-per-task=" + str(args.processors) + "\n")
 	if not too_many_commands(args):
-		scripth.write("#SBATCH --cpus-per-task=" + str(args.processors) + "\n")
-	else:
 		scripth.write("#SBATCH --ntasks=1\n")
 	scripth.write("# \n")
 	
